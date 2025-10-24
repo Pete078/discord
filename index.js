@@ -67,21 +67,40 @@ app.post("/youtube-websub", async (req, res) => {
             if (notifiedStreams.has(videoId)) continue; // ไม่แจ้งซ้ำ
             notifiedStreams.add(videoId);
 
+            const videoRes = await axios.get(
+                `https://www.googleapis.com/youtube/v3/videos`,
+                {
+                    params: {
+                        part: "snippet,liveStreamingDetails",
+                        id: videoId,
+                        key: YOUTUBE_API_KEY,
+                    },
+                }
+            );
+            const stream = videoRes.data.items[0];
+            const scheduledTime = stream.liveStreamingDetails?.scheduledStartTime;
+
             const url = `https://www.youtube.com/watch?v=${videoId}`;
             const channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
 
-            // Embed สีสวย
-            const embed = new EmbedBuilder()
-                .setTitle(title)
-                .setURL(url)
-                .setDescription(`🎬 สตรีมมี event ใหม่!`)
-                .addFields(
-                    { name: "เริ่มเผยแพร่", value: new Date(published).toLocaleString("th-TH") }
-                )
-                .setColor(0xff0000) // ✅ ใช้เลข hexadecimal
-                .setTimestamp();
+            channel.send({
+                content: `@everyone 🎬 สตรีมกำลังจะมา!\n${url}\nเริ่มเผยแพร่: ${new Date(scheduledTime).toLocaleString("th-TH")}`,
+                allowedMentions: { parse: ["everyone"] } // ป้องกันการแท็กคนอื่นโดยไม่ได้ตั้งใจ
+            });
 
-            channel.send({ content: "@everyone", embeds: [embed] });
+
+            // Embed สีสวย
+            // const embed = new EmbedBuilder()
+            //     .setTitle(title)
+            //     .setURL(url)
+            //     .setDescription(`🎬 สตรีมกำลังจะมา !`)
+            //     .addFields(
+            //         { name: "เริ่มเผยแพร่", value: new Date(scheduledTime).toLocaleString("th-TH") }
+            //     )
+            //     .setColor(0xff0000) // ✅ ใช้เลข hexadecimal
+            //     .setTimestamp();
+
+            // channel.send({ content: "@everyone", embeds: [embed] });
         }
     } catch (err) {
         console.error("Error parsing WebSub XML:", err.message);
