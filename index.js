@@ -85,7 +85,7 @@ app.post("/youtube-websub", async (req, res) => {
             const channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
 
             channel.send({
-                content: `@everyone 🎬 สตรีมกำลังจะมา!\n${url}\nเริ่มเผยแพร่: ${new Date(scheduledTime).toLocaleString("th-TH")}`,
+                content: `@everyone\n 🎬 สตรีมกำลังจะมา!\nเริ่มเผยแพร่: ${new Date(scheduledTime).toLocaleString("th-TH")} \n คลิกที่นี่: ${url}`,
                 allowedMentions: { parse: ["everyone"] } // ป้องกันการแท็กคนอื่นโดยไม่ได้ตั้งใจ
             });
 
