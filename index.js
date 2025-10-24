@@ -17,6 +17,7 @@ const DISCORD_CHANNEL_ID = process.env.CHANNEL_TEST;
 const YOUTUBE_CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
 const PORT = process.env.PORT || 10000;
 const BASE_URL = process.env.BASE_URL;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // Set เก็บ videoId ที่แจ้งแล้ว
 const notifiedStreams = new Set();
