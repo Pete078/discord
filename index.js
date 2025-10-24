@@ -13,7 +13,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
-const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
+const DISCORD_CHANNEL_ID = process.env.CHANNEL_TEST;
 const YOUTUBE_CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
 const PORT = process.env.PORT || 10000;
 const BASE_URL = process.env.BASE_URL;
