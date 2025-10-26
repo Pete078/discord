@@ -1,3 +1,6 @@
+// ------------------------
+// โหลด Module ที่จำเป็น
+// ------------------------
 const express = require("express");
 const { Client, GatewayIntentBits,Partials ,ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const axios = require("axios");
@@ -6,9 +9,15 @@ const xml2js = require("xml2js");
 
 dotenv.config();
 
+// ------------------------
+// Express Server
+// ------------------------
 const app = express();
-app.use(express.text({ type: "*/*" }));
+app.use(express.text({ type: "*/*" })); // รับ raw XML จาก WebSub
 
+// ------------------------
+// Discord Bot
+// ------------------------
 const client = new Client({
     intents: [GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
@@ -25,11 +34,11 @@ const PORT = process.env.PORT || 10000;
 const BASE_URL = process.env.BASE_URL;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
-const messageMap = new Map();
-const activeStreams = new Map(); // 🔹 เก็บ stream ที่ยัง live อยู่
+// Set เก็บ videoId ที่แจ้งแล้ว
+const notifiedStreams = new Set();
 
 client.once("ready", () => {
-    console.log(`Bot Active as ${client.user.tag}`);
+    console.log(`✅ Bot Active as ${client.user.tag}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
@@ -81,16 +90,19 @@ client.on('interactionCreate', async (interaction) => {
 // ------------------------
 // YouTube WebSub Endpoint
 // ------------------------
+
+// สำหรับ YouTube verify subscription
 app.get("/youtube-websub", (req, res) => {
     const challenge = req.query["hub.challenge"];
     if (challenge) {
-        console.log("Webhook verified!");
+        console.log("✅ YouTube Webhook verified!");
         res.send(challenge);
     } else {
         res.sendStatus(200);
     }
 });
 
+// รับ notification จาก YouTube
 app.post("/youtube-websub", async (req, res) => {
     res.sendStatus(200);
 
@@ -104,6 +116,10 @@ app.post("/youtube-websub", async (req, res) => {
         for (let item of items) {
             const videoId = item["yt:videoId"];
             const title = item["title"];
+            const published = item["published"];
+
+            if (notifiedStreams.has(videoId)) continue; // ไม่แจ้งซ้ำ
+            notifiedStreams.add(videoId);
 
             const videoRes = await axios.get(
                 `https://www.googleapis.com/youtube/v3/videos`,
@@ -115,78 +131,33 @@ app.post("/youtube-websub", async (req, res) => {
                     },
                 }
             );
-
             const stream = videoRes.data.items[0];
-            const liveDetails = stream?.liveStreamingDetails;
-            if (!liveDetails) continue;
+            const scheduledTime = stream.liveStreamingDetails?.scheduledStartTime;
 
+            const url = `https://www.youtube.com/watch?v=${videoId}`;
             const channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
 
-            // 🟥 ไลฟ์จบแล้ว
-            if (liveDetails.actualEndTime) {
-                if (messageMap.has(videoId)) {
-                    try {
-                        const messageId = messageMap.get(videoId);
-                        const msg = await channel.messages.fetch(messageId);
-                        await msg.delete();
-                        console.log(`🗑️ ลบข้อความแจ้งเตือนของ live ${videoId}`);
-                    } catch (err) {
-                        console.warn(`⚠️ ลบข้อความไม่ได้:`, err.message);
-                    }
-                    messageMap.delete(videoId);
-                }
+            channel.send({
+                content: `@everyone\n 🎬 สตรีมกำลังจะมา!\nเริ่มเผยแพร่: ${new Date(scheduledTime).toLocaleString("th-TH")} \n คลิกที่นี่: ${url}`,
+                allowedMentions: { parse: ["everyone"] } // ป้องกันการแท็กคนอื่นโดยไม่ได้ตั้งใจ
+            });
 
-                // ❌ ยกเลิกแจ้งเตือนซ้ำ
-                if (activeStreams.has(videoId)) {
-                    clearInterval(activeStreams.get(videoId).interval);
-                    activeStreams.delete(videoId);
-                    console.log(`🛑 หยุดแจ้งซ้ำ live ${videoId}`);
-                }
 
-                continue;
-            }
+            // Embed สีสวย
+            // const embed = new EmbedBuilder()
+            //     .setTitle(title)
+            //     .setURL(url)
+            //     .setDescription(`🎬 สตรีมกำลังจะมา !`)
+            //     .addFields(
+            //         { name: "เริ่มเผยแพร่", value: new Date(scheduledTime).toLocaleString("th-TH") }
+            //     )
+            //     .setColor(0xff0000) // ✅ ใช้เลข hexadecimal
+            //     .setTimestamp();
 
-            // 🟩 ไลฟ์ใหม่หรือกำลังจะเริ่ม
-            if (liveDetails.scheduledStartTime && !liveDetails.actualEndTime) {
-                const url = `https://www.youtube.com/watch?v=${videoId}`;
-                const msg = await channel.send({
-                    content: `@everyone 🎬 สตรีมกำลังจะมา!\nชื่อ: **${title}**\nเริ่มเวลา: ${new Date(liveDetails.scheduledStartTime).toLocaleString("th-TH")}\n📺 ${url}`,
-                    allowedMentions: { parse: ["everyone"] },
-                });
-
-                messageMap.set(videoId, msg.id);
-                console.log(`📢 แจ้งเตือน live: ${title}`);
-
-                // 🔁 ตั้งแจ้งซ้ำทุก 30 นาที
-                const interval = setInterval(async () => {
-                    try {
-                        const res = await axios.get(`https://www.googleapis.com/youtube/v3/videos`, {
-                            params: {
-                                part: "liveStreamingDetails",
-                                id: videoId,
-                                key: YOUTUBE_API_KEY,
-                            },
-                        });
-                        const status = res.data.items[0]?.liveStreamingDetails;
-                        if (!status || status.actualEndTime) {
-                            console.log(`🛑 ไลฟ์ ${videoId} จบแล้ว หยุดแจ้งซ้ำ`);
-                            clearInterval(interval);
-                            activeStreams.delete(videoId);
-                            return;
-                        }
-
-                        await channel.send(`📺 ไลฟ์ **${title}** ยังคงดำเนินอยู่!\n🔗 ${url}`);
-                        console.log(`⏰ แจ้งซ้ำ (live ยังไม่จบ): ${title}`);
-                    } catch (err) {
-                        console.error("Error checking live status:", err.message);
-                    }
-                }, 30 * 60 * 1000); // ทุก 30 นาที
-
-                activeStreams.set(videoId, { interval });
-            }
+            // channel.send({ content: "@everyone", embeds: [embed] });
         }
     } catch (err) {
-        console.error("Error parsing WebSub XML:", err.message);
+        console.error("❌ Error parsing WebSub XML:", err.message);
     }
 });
 
@@ -198,22 +169,27 @@ async function subscribeYouTube() {
         const callback = `${BASE_URL}/youtube-websub`;
         const topic = `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${YOUTUBE_CHANNEL_ID}`;
 
-        await axios.post("https://pubsubhubbub.appspot.com/subscribe", null, {
-            params: {
-                "hub.mode": "subscribe",
-                "hub.topic": topic,
-                "hub.callback": callback,
-                "hub.verify": "async",
-            },
-        });
+        await axios.post(
+            "https://pubsubhubbub.appspot.com/subscribe",
+            null,
+            {
+                params: {
+                    "hub.mode": "subscribe",
+                    "hub.topic": topic,
+                    "hub.callback": callback,
+                    "hub.verify": "async"
+                },
+            }
+        );
         console.log("Subscribed to YouTube WebSub!");
     } catch (err) {
-        console.error("Error subscribing:", err.message);
+        console.error("❌ Error subscribing:", err.message);
     }
 }
 
+// Subscribe ตอน start server
 subscribeYouTube();
 
 app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+    console.log(`🚀 Server listening on port ${PORT}`);
 });
