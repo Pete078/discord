@@ -192,6 +192,16 @@ async function subscribeYouTube() {
 // ------------------------
 // Start Server
 // ------------------------
+
+if (BASE_URL) {
+    setInterval(() => {
+        axios
+            .get(BASE_URL)
+            .then(() => console.log("💓 Self ping to prevent sleep"))
+            .catch(() => console.warn("⚠️ Self ping failed"));
+    }, 5 * 60 * 1000); // ทุก 5 นาที
+}
+
 subscribeYouTube();
 
 app.listen(PORT, () => {
