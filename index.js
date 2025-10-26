@@ -88,20 +88,7 @@ app.post("/youtube-websub", async (req, res) => {
                 content: `@everyone\n 🎬 สตรีมกำลังจะมา!\nเริ่มเผยแพร่: ${new Date(scheduledTime).toLocaleString("th-TH")} \n คลิกที่นี่: ${url}`,
                 allowedMentions: { parse: ["everyone"] } // ป้องกันการแท็กคนอื่นโดยไม่ได้ตั้งใจ
             });
-
-
-            // Embed สีสวย
-            // const embed = new EmbedBuilder()
-            //     .setTitle(title)
-            //     .setURL(url)
-            //     .setDescription(`🎬 สตรีมกำลังจะมา !`)
-            //     .addFields(
-            //         { name: "เริ่มเผยแพร่", value: new Date(scheduledTime).toLocaleString("th-TH") }
-            //     )
-            //     .setColor(0xff0000) // ✅ ใช้เลข hexadecimal
-            //     .setTimestamp();
-
-            // channel.send({ content: "@everyone", embeds: [embed] });
+            
         }
     } catch (err) {
         console.error("Error parsing WebSub XML:", err.message);
